@@ -255,15 +255,59 @@ with tab4:
                 st.info("Add your xAI API key in Streamlit Secrets to use Grok")
                 st.code(f'"{pe}" "{title}" ("Program Manager" OR TPOC) (Navy OR "Air Force" OR Army)')
 
-# ========== TAB 5: HELP ==========
+# ========== TAB 5: HELP & ABOUT (FULL VERSION) ==========
 with tab5:
     st.header("ℹ️ Help & About")
-    st.markdown("""
-    **This tool now uses Grok AI** to help find real Points of Contact.
+    
+    with st.expander("Where to Download the Official Budget Justification PDFs", expanded=True):
+        st.markdown("""
+        **Primary Source**: [Under Secretary of Defense (Comptroller) Budget Materials](https://comptroller.defense.gov/Budget-Materials/)
+        
+        - Go to the current FY (FY2026 / FY2027 etc.)
+        - Look for **Budget Justification** or **Detailed Budget Documents** sections.
+        - Key volumes usually include:
+          - RDT&E Defense-Wide (multiple volumes: DARPA, MDA, SOCOM, OSD, etc.)
+          - Service RDT&E and Procurement justification books (Navy, Air Force, Army)
+        - Direct example paths (may vary slightly by year):
+          - `.../budget_justification/pdfs/03_RDT_and_E/RDTE_Vol1_DARPA_MasterJustificationBook_PB_2026.pdf`
+        
+        **Service-specific sites** (sometimes have more or earlier releases):
+        - Navy: asafm.navy.mil or similar comptroller pages
+        - Army: asafm.army.mil/Budget-Materials/
+        - Air Force: often linked from main comptroller site
+        
+        **Tip**: Start with RDT&E Defense-Wide volumes (DARPA, MDA, SOCOM) and your primary service (Navy, Air Force, Army) based on the programs you support.
+        """)
 
-    **How to add your API key (securely):**
-    1. Go to your app settings on Streamlit Cloud
-    2. Click **Secrets**
-    3. Add this:
-    ```toml
-    GROK_API_KEY = "your-xai-api-key-here"
+    with st.expander("Understanding the Data (R-2, R-3, Mission Description, etc.)"):
+        st.markdown("""
+        - **Program Element (PE)**: The main "line item" identifier (e.g., 0601234N). This is what you target.
+        - **Mission Description and Budget Item Justification**: Narrative paragraphs explaining *why* the money is requested and *what technical work* is planned. This is the richest text for keyword matching.
+        - **Accomplishments / Planned Programs**: What they did last year and what they intend to do with the new money. Gold for capability alignment.
+        - **Exhibit R-2 / R-2A / R-3**: Structured budget forms. The tool extracts the surrounding text.
+        - Procurement books have shorter "Justification" paragraphs per P-1 line item.
+        """)
+
+    st.divider()
+    st.subheader("About This Tool")
+    st.markdown("""
+    **DoD Budget Justification Keyword Scout** was built to give defense contractors — especially small businesses and SDVOSBs without expensive subscription intelligence platforms — a practical, local, no-cost way to mine the public budget justification books.
+
+    It uses:
+    - **PyMuPDF (fitz)** for fast, high-quality PDF text extraction
+    - **Whoosh** for fast, pure-Python full-text search with stemming and highlighting
+    - **Grok AI** (xAI) for intelligent parsing and POC research
+
+    All processing happens on *your* machine (or on Streamlit Cloud when deployed). Nothing is uploaded or sent anywhere except when using Grok features (which require your own API key).
+
+    **Limitations**: PE detection is heuristic and works on the majority of modern justification books but isn't perfect on every page. Direct POCs are almost never in these PDFs — the tool's strength is surfacing the *right programs to chase* and giving you ammunition for research.
+
+    Customize the keyword list heavily for your shop. The more specific, the better the targeting.
+
+    Good luck landing those conversations and contracts.
+    """)
+
+    st.caption("v4.3 • Grok Powered • May 2026")
+
+st.divider()
+st.caption("Run locally with `streamlit run app.py` after `pip install -r requirements.txt`. All data stays on your machine.")
