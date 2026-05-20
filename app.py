@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Clean Professional UI
+Clean Professional UI + Useful POC Helper + Working Capabilities
 """
 
 import os
@@ -117,10 +117,23 @@ def load_capabilities():
 def save_capabilities(keywords):
     json.dump({"keywords": keywords}, open(CAPABILITIES_FILE, "w"))
 
+def score_against_capabilities(docs, keywords):
+    scored = []
+    for doc in docs:
+        content_lower = doc.get("content", "").lower()
+        matches = [kw for kw in keywords if kw.lower() in content_lower]
+        if matches:
+            scored.append({
+                **doc,
+                "match_count": len(matches),
+                "matched_keywords": ", ".join(matches[:6])
+            })
+    return sorted(scored, key=lambda x: x["match_count"], reverse=True)
+
 # ==================== UI ====================
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
 st.title("🎯 DoD Budget Justification Keyword Scout")
-st.caption("Search official DoD budget justifications • Target keywords in line items • Research POCs • Built for defense contractors & SDVOSBs")
+st.caption("Search official DoD budget justifications • Target keywords • Research POCs • Built for defense contractors & SDVOSBs")
 
 with st.sidebar:
     st.header("Index Status")
@@ -177,7 +190,7 @@ with tab1:
                     added = add_to_index(ix, docs)
                     total += added
         
-        st.success(f"✅ Successfully indexed {total} sections from {len(pdfs)} files!")
+        st.success(f"✅ Indexed {total} sections from {len(pdfs)} files!")
         if tmp: shutil.rmtree(tmp)
         st.rerun()
 
@@ -211,13 +224,13 @@ with tab2:
                 with st.expander(f"**{hit['pe_number']}** — {hit['program_title']}"):
                     st.write(hit['content'])
 
-# ========== TAB 3: MY CAPABILITIES ==========
+# ========== TAB 3: MY CAPABILITIES (FINISHED) ==========
 with tab3:
     st.header("⭐ My Capabilities")
-    st.markdown("Edit keywords that describe what you sell or do.")
+    st.markdown("Edit keywords that describe what you sell or do. The tool will score every indexed section against your keywords.")
 
     capabilities = load_capabilities()
-    caps_text = st.text_area("Keywords (one per line)", "\n".join(capabilities), height=180)
+    caps_text = st.text_area("Keywords (one per line)", "\n".join(capabilities), height=160)
     
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -229,12 +242,38 @@ with tab3:
             save_capabilities(DEFAULT_CAPABILITIES)
             st.rerun()
 
-    st.info("Capability scoring coming in next update. Use Search tab for now.")
+    st.divider()
 
-# ========== TAB 4: POC RESEARCH HELPER ==========
+    if st.button("🚀 Score All Documents Against My Keywords", type="primary"):
+        try:
+            ix = whoosh_index.open_dir(INDEX_PATH)
+            all_docs = []
+            with ix.searcher() as s:
+                for doc in s.all_stored_fields():
+                    all_docs.append({
+                        "pe_number": doc.get("pe_number", "Unknown"),
+                        "program_title": doc.get("program_title", ""),
+                        "source": doc.get("source", ""),
+                        "content": doc.get("content", "")
+                    })
+            
+            scored = score_against_capabilities(all_docs, capabilities)
+            
+            if not scored:
+                st.warning("No matches found. Try adding more specific keywords.")
+            else:
+                st.success(f"Found {len(scored)} sections that match your capabilities!")
+                for item in scored[:15]:
+                    with st.expander(f"**{item['pe_number']}** — {item['program_title']} ({item['match_count']} matches)"):
+                        st.write(f"**Matched keywords:** {item['matched_keywords']}")
+                        st.write(item['content'][:600])
+        except:
+            st.warning("No index found. Please upload and index PDFs first.")
+
+# ========== TAB 4: POC RESEARCH HELPER (IMPROVED) ==========
 with tab4:
     st.header("🧭 POC Research Helper")
-    st.markdown("Generate targeted search queries to find Program Managers and opportunities.")
+    st.markdown("Generate targeted, actionable research queries and outreach materials.")
 
     col_pe, col_title = st.columns(2)
     with col_pe:
@@ -242,15 +281,28 @@ with tab4:
     with col_title:
         title = st.text_input("Program Title")
 
-    if st.button("Generate Search Links", type="primary"):
+    if st.button("Generate Research Package", type="primary"):
         if not pe and not title:
             st.warning("Enter at least a PE number or program title")
         else:
             base = f'"{pe}" "{title}"' if title else f'"{pe}"'
-            st.subheader("Ready-to-Use Searches")
-            st.code(f'{base} ("Program Manager" OR TPOC OR "Technical Point of Contact") (Navy OR "Air Force" OR Army OR DARPA)')
-            st.code(f'{base} site:sbir.gov OR site:sttr.gov')
-            st.code(f'{base} (award OR contract) site:usaspending.gov')
+            
+            st.subheader("1. Google / LinkedIn Searches")
+            st.code(f'{base} ("Program Manager" OR TPOC OR "Technical Point of Contact" OR "Contracting Officer") (Navy OR "Air Force" OR Army OR DARPA OR MDA)')
+            st.code(f'{base} ("Program Manager" OR TPOC) site:linkedin.com')
+            
+            st.subheader("2. SBIR / STTR Opportunities")
+            st.code(f'{pe} OR "{title}" site:sbir.gov OR site:sttr.gov')
+            
+            st.subheader("3. Recent Awards & Spending")
+            st.code(f'{base} (award OR contract OR "program element") site:usaspending.gov')
+            
+            st.subheader("4. SAM.gov Opportunities")
+            st.code(f'{pe} OR "{title}" defense harness OR connector OR avionics')
+            
+            st.subheader("5. Suggested Outreach Email Subject Lines")
+            st.code(f"Re: FY27 {title or 'Program'} - {pe} Capability Alignment")
+            st.code(f"Support for {title or 'Program'} ({pe}) - Advanced Interconnect Solutions")
 
 # ========== TAB 5: HELP & ABOUT ==========
 with tab5:
@@ -273,12 +325,13 @@ with tab5:
     **Features:**
     - Direct PDF upload (no local folder needed)
     - Keyword search across Program Elements
-    - POC research helper with pre-built queries
+    - Capability scoring against your keywords
+    - POC research helper with actionable queries
 
     Good luck landing those conversations and contracts.
     """)
 
-    st.caption("v3.7 • Clean Professional UI • May 2026")
+    st.caption("v3.8 • Clean UI + Useful POC Helper + Working Capabilities • May 2026")
 
 st.divider()
 st.caption("Run locally with `streamlit run app.py` after `pip install -r requirements.txt`")
