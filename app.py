@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Full UI - All 5 tabs + Reliable Indexing
+Full UI - Clean & Readable
 """
 
 import os
@@ -120,7 +120,7 @@ def save_capabilities(keywords):
 # UI
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
 st.title("🎯 DoD Budget Justification Keyword Scout")
-st.caption("Search official DoD budget justifications & descriptive summaries • Target keywords in line items • Research POCs & initiate conversations • Built for defense contractors & SDVOSBs")
+st.caption("Search official DoD budget justifications & descriptive summaries • Target keywords in line items • Research POCs • Built for defense contractors & SDVOSBs")
 
 with st.sidebar:
     st.header("Index Status")
@@ -143,7 +143,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # ========== TAB 1: DATA INGESTION ==========
 with tab1:
     st.header("Ingest & Index Budget Justification PDFs")
-    st.markdown("**Upload one or more PDF files** (justification books from comptroller.defense.gov)")
+    st.markdown("**Upload one or more PDF files** from comptroller.defense.gov")
 
     uploaded = st.file_uploader("Upload PDF(s)", type="pdf", accept_multiple_files=True)
     
@@ -192,15 +192,15 @@ with tab1:
 # ========== TAB 2: SEARCH & TARGET ==========
 with tab2:
     st.header("Keyword Search Across Budget Justifications")
-    st.caption("Enter keywords or Whoosh query syntax")
+    st.caption("Enter keywords or Whoosh query syntax. Results are ranked by relevance.")
 
     query = st.text_input("Search query", value="harness OR connector OR payload")
-    
+
     col1, col2 = st.columns(2)
     with col1:
-        limit = st.slider("Max results", 5, 50, 20)
+        limit = st.slider("Max results", 5, 50, 20, help="How many results to return")
     with col2:
-        min_score = st.slider("Min score", 0.0, 20.0, 0.0, step=0.5)
+        min_score = st.slider("Min score", 0.0, 20.0, 0.0, step=0.5, help="Only show strong matches (0 = show all)")
 
     if st.button("🔎 Search", type="primary"):
         results = search_index(query, limit)
@@ -215,7 +215,7 @@ with tab2:
 # ========== TAB 3: MY CAPABILITIES ==========
 with tab3:
     st.header("⭐ My Capabilities")
-    st.markdown("Edit keywords that describe what you sell or do. The tool will help you find matching programs.")
+    st.markdown("Edit the keywords that describe what you sell or do.")
 
     capabilities = load_capabilities()
     caps_text = st.text_area("Keywords (one per line)", "\n".join(capabilities), height=180)
@@ -230,16 +230,19 @@ with tab3:
             save_capabilities(DEFAULT_CAPABILITIES)
             st.rerun()
 
-    st.info("Capability scoring coming in next update. Use Search tab for now.")
+    st.info("Capability scoring coming soon. Use the Search tab for now.")
 
 # ========== TAB 4: POC RESEARCH HELPER ==========
 with tab4:
     st.header("🧭 POC Research Helper")
-    st.markdown("Generate targeted search queries to find Program Managers, TPOCs, and opportunities.")
+    st.markdown("Generate targeted search queries to find Program Managers and opportunities.")
 
-    pe = st.text_input("Program Element (e.g. 0601234N)")
-    title = st.text_input("Program Title")
-    
+    col_pe, col_title = st.columns(2)
+    with col_pe:
+        pe = st.text_input("Program Element (e.g. 0601234N)")
+    with col_title:
+        title = st.text_input("Program Title")
+
     if st.button("Generate Search Links", type="primary"):
         if not pe and not title:
             st.warning("Enter at least a PE number or program title")
@@ -272,12 +275,11 @@ with tab5:
     - Direct PDF upload (no local folder needed)
     - Keyword search across Program Elements
     - POC research helper with pre-built queries
-    - All processing happens on your machine or Streamlit Cloud
 
     Good luck landing those conversations and contracts.
     """)
 
-    st.caption("v3.5 • Full UI • May 2026")
+    st.caption("v3.6 • Clean Layout • May 2026")
 
 st.divider()
 st.caption("Run locally with `streamlit run app.py` after `pip install -r requirements.txt`")
