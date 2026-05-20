@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Full UI + Grok AI Integration
+Clean 5-Tab UI + Grok AI Powered
 """
 
 import os
@@ -21,88 +21,39 @@ APP_NAME = "DoD Budget Justification Keyword Scout"
 INDEX_PATH = "./whoosh_index"
 CAPABILITIES_FILE = "my_capabilities.json"
 
-# ==================== GROK API SETUP ====================
-# Get your xAI API key from https://console.x.ai/
-GROK_API_KEY = st.secrets.get("GROK_API_KEY", "")  # or hardcode for testing
+# ==================== GROK SETUP ====================
+GROK_API_KEY = ""  # ← Paste your xAI API key here
 
-def get_grok_client():
+def get_grok():
     if not GROK_API_KEY:
-        st.error("Please add your Grok API key in the sidebar or secrets")
         return None
-    return OpenAI(
-        api_key=GROK_API_KEY,
-        base_url="https://api.x.ai/v1"   # xAI Grok endpoint
-    )
+    return OpenAI(api_key=GROK_API_KEY, base_url="https://api.x.ai/v1")
 
-def grok_parse_pdf(text):
-    """Use Grok to parse and structure PDF text"""
-    client = get_grok_client()
-    if not client:
-        return None
-    
-    prompt = f"""You are an expert at parsing DoD budget justification documents.
-    
-Extract the following from the text below:
-- Program Element (PE) number
-- Program Title
-- Mission Description / Justification summary (2-3 sentences)
-- Key technologies or capabilities mentioned
-- Funding amounts if available (current year + out years)
-- Any Points of Contact or program office information
-
-Return the result in clean JSON format with these keys:
-pe_number, program_title, justification_summary, key_capabilities, funding, contacts
-
-Text:
-{text[:8000]}
-"""
-    
-    try:
-        response = client.chat.completions.create(
-            model="grok-2-1212",   # or grok-beta
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=1500
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Grok error: {e}")
-        return None
-
-def grok_find_pocs(pe_number, program_title):
-    """Use Grok to generate smart POC research"""
-    client = get_grok_client()
-    if not client:
-        return None
-    
-    prompt = f"""You are an expert defense industry business development professional.
-    
-For this Program Element: {pe_number} - {program_title}
-
-Give me:
-1. The 3 best LinkedIn search queries to find the actual Program Manager / TPOC
-2. The best SBIR/STTR search strategy to find the TPOC name + email
-3. 2-3 suggested email subject lines for cold outreach
-4. Any known program office or command that owns this PE (if you know)
-
-Be specific and actionable. Do not give generic advice.
-"""
-    
+def grok_parse(text):
+    client = get_grok()
+    if not client: return None
     try:
         response = client.chat.completions.create(
             model="grok-2-1212",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=1200
+            messages=[{"role": "user", "content": f"Extract PE number, program title, justification summary, key capabilities, and funding from this DoD budget text. Return clean JSON.\n\n{text[:6000]}"}],
+            temperature=0.1, max_tokens=1200
         )
         return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Grok error: {e}")
-        return None
+    except: return None
 
-# ==================== REST OF YOUR EXISTING CODE ====================
-# (Keep all your existing functions: clean_text, extract_pe, process_pdf, etc.)
+def grok_poc_research(pe, title):
+    client = get_grok()
+    if not client: return None
+    try:
+        response = client.chat.completions.create(
+            model="grok-2-1212",
+            messages=[{"role": "user", "content": f"Act as a defense BD expert. For PE {pe} - {title}, give me: 1) Best LinkedIn search queries, 2) Best way to find TPOC email, 3) Suggested email subject lines. Be specific."}],
+            temperature=0.3, max_tokens=1000
+        )
+        return response.choices[0].message.content
+    except: return None
 
+# ==================== CORE FUNCTIONS ====================
 def clean_text(t):
     t = re.sub(r'[ \t]+', ' ', t)
     t = re.sub(r'\n{3,}', '\n\n', t)
@@ -118,8 +69,7 @@ def process_pdf(path):
     docs = []
     try:
         doc = fitz.open(path)
-    except:
-        return docs
+    except: return docs
     src = os.path.basename(path)
     pe = "General"
     title = src.replace(".pdf", "")
@@ -130,8 +80,7 @@ def process_pdf(path):
         if len(txt) < 50: continue
         new_pe = extract_pe(txt)
         if new_pe and new_pe != pe:
-            if parts:
-                docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
+            if parts: docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
             pe = new_pe
             title = txt.split('\n')[0][:60]
             parts = [txt]
@@ -139,25 +88,16 @@ def process_pdf(path):
         else:
             parts.append(txt)
             pages.append(i+1)
-    if parts:
-        docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
+    if parts: docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
     doc.close()
     return docs
 
 def get_or_create_index():
-    schema = Schema(
-        id=ID(unique=True, stored=True),
-        pe_number=KEYWORD(stored=True),
-        program_title=TEXT(stored=True),
-        source=TEXT(stored=True),
-        pages=STORED(),
-        content=TEXT(stored=True, analyzer=StemmingAnalyzer())
-    )
+    schema = Schema(id=ID(unique=True, stored=True), pe_number=KEYWORD(stored=True), program_title=TEXT(stored=True), source=TEXT(stored=True), pages=STORED(), content=TEXT(stored=True, analyzer=StemmingAnalyzer()))
     if not os.path.exists(INDEX_PATH):
         os.makedirs(INDEX_PATH)
         return whoosh_index.create_in(INDEX_PATH, schema)
-    try:
-        return whoosh_index.open_dir(INDEX_PATH)
+    try: return whoosh_index.open_dir(INDEX_PATH)
     except:
         shutil.rmtree(INDEX_PATH)
         os.makedirs(INDEX_PATH)
@@ -165,8 +105,7 @@ def get_or_create_index():
 
 def add_to_index(ix, docs):
     w = ix.writer()
-    for d in docs:
-        w.update_document(**d)
+    for d in docs: w.update_document(**d)
     w.commit()
     return len(docs)
 
@@ -176,19 +115,14 @@ def search_index(query, limit=25):
         parser = MultifieldParser(["content", "program_title"], schema=ix.schema)
         with ix.searcher() as s:
             results = s.search(parser.parse(query), limit=limit)
-            return [{"pe_number": r.get("pe_number", "Unknown"), 
-                    "program_title": r.get("program_title", ""), 
-                    "content": r.get("content", "")[:900]} for r in results]
-    except:
-        return []
+            return [{"pe_number": r.get("pe_number", "Unknown"), "program_title": r.get("program_title", ""), "content": r.get("content", "")[:900]} for r in results]
+    except: return []
 
 def load_capabilities():
     if os.path.exists(CAPABILITIES_FILE):
-        try:
-            return json.load(open(CAPABILITIES_FILE))["keywords"]
-        except:
-            pass
-    return DEFAULT_CAPABILITIES
+        try: return json.load(open(CAPABILITIES_FILE))["keywords"]
+        except: pass
+    return ["avionics", "harness", "connector", "electro-mechanical", "MIL-STD", "RDT&E", "payload", "interconnect"]
 
 def save_capabilities(keywords):
     json.dump({"keywords": keywords}, open(CAPABILITIES_FILE, "w"))
@@ -202,74 +136,106 @@ with st.sidebar:
     st.header("Index Status")
     try:
         ix = whoosh_index.open_dir(INDEX_PATH)
-        with ix.searcher() as s:
-            count = s.doc_count()
+        with ix.searcher() as s: count = s.doc_count()
         st.success(f"✅ {count:,} sections indexed")
     except:
         st.warning("No index yet")
 
     st.divider()
-    st.header("Grok AI Settings")
+    st.header("Grok AI")
     api_key = st.text_input("xAI API Key", type="password", value=GROK_API_KEY)
-    if api_key:
-        GROK_API_KEY = api_key
+    if api_key: GROK_API_KEY = api_key
+    use_grok = st.checkbox("Use Grok for parsing & POC research", value=True)
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📥 Data Ingestion", 
     "🔍 Search & Target", 
     "⭐ My Capabilities", 
     "🧭 POC Research Helper", 
-    "🤖 Grok AI Assistant",
     "ℹ️ Help & About"
 ])
 
-# Tab 1-4 remain the same as your current clean version (Data Ingestion, Search, Capabilities, POC Helper)
+# ========== TAB 1: DATA INGESTION ==========
+with tab1:
+    st.header("📥 Upload & Index Budget PDFs")
+    uploaded = st.file_uploader("Upload PDF(s)", type="pdf", accept_multiple_files=True)
+    
+    pdfs = []
+    tmp = None
+    if uploaded:
+        tmp = tempfile.mkdtemp()
+        for f in uploaded:
+            p = os.path.join(tmp, f.name)
+            with open(p, "wb") as out: out.write(f.getbuffer())
+            pdfs.append(p)
+        st.success(f"✅ {len(uploaded)} file(s) ready")
 
-# ========== TAB 5: GROK AI ASSISTANT (NEW) ==========
-with tab5:
-    st.header("🤖 Grok AI Assistant")
-    st.markdown("Use Grok to parse PDFs, find real POCs, and generate professional outreach materials.")
+    if st.button("🚀 Scan & Build / Update Index", type="primary", disabled=not pdfs):
+        ix = get_or_create_index()
+        total = 0
+        for p in pdfs:
+            st.write(f"Processing {os.path.basename(p)}...")
+            docs = process_pdf(p)
+            if docs:
+                added = add_to_index(ix, docs)
+                total += added
+        st.success(f"✅ Indexed {total} sections!")
+        if tmp: shutil.rmtree(tmp)
+        st.rerun()
 
-    option = st.radio("What would you like Grok to help with?", 
-                      ["Parse PDF & Extract Structured Data", 
-                       "Find Real POCs for a Program", 
-                       "Generate Outreach Email"])
+# ========== TAB 2: SEARCH & TARGET ==========
+with tab2:
+    st.header("🔍 Search Budget Justifications")
+    query = st.text_input("Search query", value="harness OR connector OR payload")
+    if st.button("🔎 Search", type="primary"):
+        results = search_index(query)
+        if not results:
+            st.info("No matches found")
+        for hit in results:
+            with st.expander(f"**{hit['pe_number']}** — {hit['program_title']}"):
+                st.write(hit['content'])
 
-    if option == "Parse PDF & Extract Structured Data":
-        uploaded = st.file_uploader("Upload a PDF for Grok to analyze", type="pdf")
-        if uploaded and st.button("Analyze with Grok"):
-            with st.spinner("Grok is reading and structuring the document..."):
-                text = ""
-                with fitz.open(stream=uploaded.read(), filetype="pdf") as doc:
-                    for page in doc:
-                        text += page.get_text()
-                
-                result = grok_parse_pdf(text)
-                if result:
-                    st.subheader("Grok's Structured Output")
-                    st.json(result)
+# ========== TAB 3: MY CAPABILITIES ==========
+with tab3:
+    st.header("⭐ My Capabilities")
+    capabilities = load_capabilities()
+    caps_text = st.text_area("Keywords (one per line)", "\n".join(capabilities), height=160)
+    if st.button("💾 Save Keywords"):
+        save_capabilities([x.strip() for x in caps_text.split("\n") if x.strip()])
+        st.success("Saved!")
 
-    elif option == "Find Real POCs for a Program":
-        pe = st.text_input("Program Element")
+# ========== TAB 4: POC RESEARCH HELPER (GROK POWERED) ==========
+with tab4:
+    st.header("🧭 POC Research Helper")
+    st.markdown("**Find real people to contact** (Program Managers, TPOCs, Contracting Officers)")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        pe = st.text_input("Program Element (e.g. 0601234N)")
+    with col2:
         title = st.text_input("Program Title (optional)")
-        
-        if st.button("Ask Grok to Find POCs"):
-            with st.spinner("Grok is researching..."):
-                result = grok_find_pocs(pe, title)
-                if result:
-                    st.subheader("Grok's POC Research")
-                    st.markdown(result)
 
-    elif option == "Generate Outreach Email":
-        pe = st.text_input("Program Element")
-        title = st.text_input("Program Title")
-        your_company = st.text_input("Your Company / Capability")
-        
-        if st.button("Generate Email with Grok"):
-            # Add email generation prompt here
-            st.info("Email generation coming in next update")
+    if st.button("Research POCs with Grok", type="primary"):
+        if not pe:
+            st.warning("Enter a Program Element number")
+        else:
+            if use_grok and GROK_API_KEY:
+                with st.spinner("Grok is researching..."):
+                    result = grok_poc_research(pe, title)
+                    if result:
+                        st.subheader("Grok's POC Research")
+                        st.markdown(result)
+            else:
+                st.info("Grok is disabled or no API key. Using basic version.")
+                st.code(f'"{pe}" "{title}" ("Program Manager" OR TPOC) (Navy OR "Air Force" OR Army)')
 
-# Tab 6 (Help) stays the same
+# ========== TAB 5: HELP ==========
+with tab5:
+    st.header("ℹ️ Help & About")
+    st.markdown("""
+    **This tool now uses Grok AI** to help parse documents and find real Points of Contact.
+    
+    Add your xAI API key in the sidebar to enable Grok features.
+    """)
 
-st.divider()
-st.caption("v4.0 • Grok AI Powered • May 2026")
+st.caption("v4.1 • Grok Powered • May 2026")
