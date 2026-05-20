@@ -40,7 +40,7 @@ def grok_poc_research(pe, title):
     try:
         prompt = f"Act as a defense BD expert. For PE {pe} - {title}, give me: 1) Best LinkedIn search queries, 2) Best way to find TPOC email, 3) Suggested email subject lines. Be specific."
         response = client.chat.completions.create(
-            model="grok-2-1212",
+            model="grok-3-latest",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=1000
