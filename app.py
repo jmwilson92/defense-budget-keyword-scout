@@ -22,7 +22,7 @@ INDEX_PATH = "./whoosh_index"
 CAPABILITIES_FILE = "my_capabilities.json"
 
 # ==================== GROK SETUP ====================
-GROK_API_KEY = ""  # ← Paste your xAI API key here
+GROK_API_KEY = st.secrets.get("GROK_API_KEY", "")
 
 def get_grok():
     if not GROK_API_KEY:
@@ -234,8 +234,5 @@ with tab5:
     st.header("ℹ️ Help & About")
     st.markdown("""
     **This tool now uses Grok AI** to help parse documents and find real Points of Contact.
-    
-    Add your xAI API key in the sidebar to enable Grok features.
-    """)
 
 st.caption("v4.1 • Grok Powered • May 2026")
