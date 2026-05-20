@@ -29,29 +29,22 @@ def get_grok():
         return None
     return OpenAI(api_key=GROK_API_KEY, base_url="https://api.x.ai/v1")
 
-def grok_parse(text):
-    client = get_grok()
-    if not client: return None
-    try:
-        response = client.chat.completions.create(
-            model="grok-2-1212",
-            messages=[{"role": "user", "content": f"Extract PE number, program title, justification summary, key capabilities, and funding from this DoD budget text. Return clean JSON.\n\n{text[:6000]}"}],
-            temperature=0.1, max_tokens=1200
-        )
-        return response.choices[0].message.content
-    except: return None
-
 def grok_poc_research(pe, title):
     client = get_grok()
-    if not client: return None
+    if not client:
+        return None
     try:
+        prompt = f"Act as a defense BD expert. For PE {pe} - {title}, give me: 1) Best LinkedIn search queries, 2) Best way to find TPOC email, 3) Suggested email subject lines. Be specific."
         response = client.chat.completions.create(
             model="grok-2-1212",
-            messages=[{"role": "user", "content": f"Act as a defense BD expert. For PE {pe} - {title}, give me: 1) Best LinkedIn search queries, 2) Best way to find TPOC email, 3) Suggested email subject lines. Be specific."}],
-            temperature=0.3, max_tokens=1000
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=1000
         )
         return response.choices[0].message.content
-    except: return None
+    except Exception as e:
+        st.error(f"Grok error: {e}")
+        return None
 
 # ==================== CORE FUNCTIONS ====================
 def clean_text(t):
@@ -69,7 +62,8 @@ def process_pdf(path):
     docs = []
     try:
         doc = fitz.open(path)
-    except: return docs
+    except:
+        return docs
     src = os.path.basename(path)
     pe = "General"
     title = src.replace(".pdf", "")
@@ -77,10 +71,19 @@ def process_pdf(path):
     pages = []
     for i, page in enumerate(doc):
         txt = clean_text(page.get_text("text"))
-        if len(txt) < 50: continue
+        if len(txt) < 50:
+            continue
         new_pe = extract_pe(txt)
         if new_pe and new_pe != pe:
-            if parts: docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
+            if parts:
+                docs.append({
+                    "id": f"{src}_{pages[0]}_{pages[-1]}",
+                    "pe_number": pe,
+                    "program_title": title,
+                    "source": src,
+                    "pages": f"{pages[0]}-{pages[-1]}",
+                    "content": "\n\n".join(parts)
+                })
             pe = new_pe
             title = txt.split('\n')[0][:60]
             parts = [txt]
@@ -88,16 +91,32 @@ def process_pdf(path):
         else:
             parts.append(txt)
             pages.append(i+1)
-    if parts: docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
+    if parts:
+        docs.append({
+            "id": f"{src}_{pages[0]}_{pages[-1]}",
+            "pe_number": pe,
+            "program_title": title,
+            "source": src,
+            "pages": f"{pages[0]}-{pages[-1]}",
+            "content": "\n\n".join(parts)
+        })
     doc.close()
     return docs
 
 def get_or_create_index():
-    schema = Schema(id=ID(unique=True, stored=True), pe_number=KEYWORD(stored=True), program_title=TEXT(stored=True), source=TEXT(stored=True), pages=STORED(), content=TEXT(stored=True, analyzer=StemmingAnalyzer()))
+    schema = Schema(
+        id=ID(unique=True, stored=True),
+        pe_number=KEYWORD(stored=True),
+        program_title=TEXT(stored=True),
+        source=TEXT(stored=True),
+        pages=STORED(),
+        content=TEXT(stored=True, analyzer=StemmingAnalyzer())
+    )
     if not os.path.exists(INDEX_PATH):
         os.makedirs(INDEX_PATH)
         return whoosh_index.create_in(INDEX_PATH, schema)
-    try: return whoosh_index.open_dir(INDEX_PATH)
+    try:
+        return whoosh_index.open_dir(INDEX_PATH)
     except:
         shutil.rmtree(INDEX_PATH)
         os.makedirs(INDEX_PATH)
@@ -105,7 +124,8 @@ def get_or_create_index():
 
 def add_to_index(ix, docs):
     w = ix.writer()
-    for d in docs: w.update_document(**d)
+    for d in docs:
+        w.update_document(**d)
     w.commit()
     return len(docs)
 
@@ -115,13 +135,18 @@ def search_index(query, limit=25):
         parser = MultifieldParser(["content", "program_title"], schema=ix.schema)
         with ix.searcher() as s:
             results = s.search(parser.parse(query), limit=limit)
-            return [{"pe_number": r.get("pe_number", "Unknown"), "program_title": r.get("program_title", ""), "content": r.get("content", "")[:900]} for r in results]
-    except: return []
+            return [{"pe_number": r.get("pe_number", "Unknown"),
+                    "program_title": r.get("program_title", ""),
+                    "content": r.get("content", "")[:900]} for r in results]
+    except:
+        return []
 
 def load_capabilities():
     if os.path.exists(CAPABILITIES_FILE):
-        try: return json.load(open(CAPABILITIES_FILE))["keywords"]
-        except: pass
+        try:
+            return json.load(open(CAPABILITIES_FILE))["keywords"]
+        except:
+            pass
     return ["avionics", "harness", "connector", "electro-mechanical", "MIL-STD", "RDT&E", "payload", "interconnect"]
 
 def save_capabilities(keywords):
@@ -136,22 +161,21 @@ with st.sidebar:
     st.header("Index Status")
     try:
         ix = whoosh_index.open_dir(INDEX_PATH)
-        with ix.searcher() as s: count = s.doc_count()
+        with ix.searcher() as s:
+            count = s.doc_count()
         st.success(f"✅ {count:,} sections indexed")
     except:
         st.warning("No index yet")
 
     st.divider()
     st.header("Grok AI")
-    api_key = st.text_input("xAI API Key", type="password", value=GROK_API_KEY)
-    if api_key: GROK_API_KEY = api_key
-    use_grok = st.checkbox("Use Grok for parsing & POC research", value=True)
+    st.caption("Add your xAI API key in Streamlit Secrets (recommended)")
 
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📥 Data Ingestion", 
-    "🔍 Search & Target", 
-    "⭐ My Capabilities", 
-    "🧭 POC Research Helper", 
+    "📥 Data Ingestion",
+    "🔍 Search & Target",
+    "⭐ My Capabilities",
+    "🧭 POC Research Helper",
     "ℹ️ Help & About"
 ])
 
@@ -159,14 +183,15 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     st.header("📥 Upload & Index Budget PDFs")
     uploaded = st.file_uploader("Upload PDF(s)", type="pdf", accept_multiple_files=True)
-    
+
     pdfs = []
     tmp = None
     if uploaded:
         tmp = tempfile.mkdtemp()
         for f in uploaded:
             p = os.path.join(tmp, f.name)
-            with open(p, "wb") as out: out.write(f.getbuffer())
+            with open(p, "wb") as out:
+                out.write(f.getbuffer())
             pdfs.append(p)
         st.success(f"✅ {len(uploaded)} file(s) ready")
 
@@ -180,7 +205,8 @@ with tab1:
                 added = add_to_index(ix, docs)
                 total += added
         st.success(f"✅ Indexed {total} sections!")
-        if tmp: shutil.rmtree(tmp)
+        if tmp:
+            shutil.rmtree(tmp)
         st.rerun()
 
 # ========== TAB 2: SEARCH & TARGET ==========
@@ -219,20 +245,25 @@ with tab4:
         if not pe:
             st.warning("Enter a Program Element number")
         else:
-            if use_grok and GROK_API_KEY:
+            if GROK_API_KEY:
                 with st.spinner("Grok is researching..."):
                     result = grok_poc_research(pe, title)
                     if result:
                         st.subheader("Grok's POC Research")
                         st.markdown(result)
             else:
-                st.info("Grok is disabled or no API key. Using basic version.")
+                st.info("Add your xAI API key in Streamlit Secrets to use Grok")
                 st.code(f'"{pe}" "{title}" ("Program Manager" OR TPOC) (Navy OR "Air Force" OR Army)')
 
 # ========== TAB 5: HELP ==========
 with tab5:
     st.header("ℹ️ Help & About")
     st.markdown("""
-    **This tool now uses Grok AI** to help parse documents and find real Points of Contact.
+    **This tool now uses Grok AI** to help find real Points of Contact.
 
-st.caption("v4.1 • Grok Powered • May 2026")
+    **How to add your API key (securely):**
+    1. Go to your app settings on Streamlit Cloud
+    2. Click **Secrets**
+    3. Add this:
+    ```toml
+    GROK_API_KEY = "your-xai-api-key-here"
