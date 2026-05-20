@@ -23,6 +23,10 @@ CAPABILITIES_FILE = "my_capabilities.json"
 
 # ==================== GROK SETUP ====================
 GROK_API_KEY = st.secrets.get("GROK_API_KEY", "")
+if GROK_API_KEY:
+    st.sidebar.success("✅ Grok API Key Loaded")
+else:
+    st.sidebar.warning("⚠️ No Grok API Key Found")
 
 def get_grok():
     if not GROK_API_KEY:
