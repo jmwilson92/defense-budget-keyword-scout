@@ -26,36 +26,23 @@ def extract_pe(text):
     return m.group(1).upper() if m else None
 
 def process_pdf(path):
-    st.write(f"**Starting to process:** {os.path.basename(path)}")
     docs = []
     try:
         doc = fitz.open(path)
-        st.write(f"✅ Opened PDF with {len(doc)} pages")
-    except Exception as e:
-        st.error(f"❌ Failed to open PDF: {e}")
+    except:
         return docs
-    
     src = os.path.basename(path)
     pe = "General"
     title = src.replace(".pdf", "")
     parts = []
     pages = []
-    
     for i, page in enumerate(doc):
         txt = clean_text(page.get_text("text"))
-        if len(txt) < 30:
-            continue
+        if len(txt) < 50: continue
         new_pe = extract_pe(txt)
         if new_pe and new_pe != pe:
             if parts:
-                docs.append({
-                    "id": f"{src}_{pages[0]}_{pages[-1]}",
-                    "pe_number": pe,
-                    "program_title": title,
-                    "source": src,
-                    "pages": f"{pages[0]}-{pages[-1]}",
-                    "content": "\n\n".join(parts)
-                })
+                docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
             pe = new_pe
             title = txt.split('\n')[0][:60]
             parts = [txt]
@@ -63,22 +50,12 @@ def process_pdf(path):
         else:
             parts.append(txt)
             pages.append(i+1)
-    
     if parts:
-        docs.append({
-            "id": f"{src}_{pages[0]}_{pages[-1]}",
-            "pe_number": pe,
-            "program_title": title,
-            "source": src,
-            "pages": f"{pages[0]}-{pages[-1]}",
-            "content": "\n\n".join(parts)
-        })
-    
-    st.write(f"✅ Extracted {len(docs)} sections from {src}")
+        docs.append({"id": f"{src}_{pages[0]}_{pages[-1]}", "pe_number": pe, "program_title": title, "source": src, "pages": f"{pages[0]}-{pages[-1]}", "content": "\n\n".join(parts)})
     doc.close()
     return docs
 
-def get_index():
+def get_or_create_index():
     schema = Schema(
         id=ID(unique=True, stored=True),
         pe_number=KEYWORD(stored=True),
@@ -113,12 +90,18 @@ def search_index(ix, q, limit=20):
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
 st.title("🎯 DoD Budget Justification Keyword Scout")
 
+# Use session state to persist the index
+if "ix" not in st.session_state:
+    try:
+        st.session_state.ix = whoosh_index.open_dir(INDEX_PATH)
+    except:
+        st.session_state.ix = None
+
 with st.sidebar:
     st.header("Index Status")
-    try:
-        ix = whoosh_index.open_dir(INDEX_PATH)
-        st.success(f"✅ {ix.searcher().doc_count():,} sections indexed")
-    except:
+    if st.session_state.ix:
+        st.success(f"✅ {st.session_state.ix.searcher().doc_count():,} sections indexed")
+    else:
         st.warning("No index yet")
 
 tab1, tab2 = st.tabs(["📥 Upload & Index", "🔍 Search"])
@@ -135,25 +118,24 @@ with tab1:
             p = os.path.join(tmp, f.name)
             with open(p, "wb") as out: out.write(f.getbuffer())
             pdfs.append(p)
-        st.success(f"✅ {len(uploaded)} file(s) ready to process")
+        st.success(f"✅ {len(uploaded)} file(s) ready")
 
     if st.button("🚀 Scan & Build / Update Index", type="primary", disabled=not pdfs):
-        st.write("### Starting indexing process...")
-        ix = get_index()
+        ix = get_or_create_index()
         total = 0
         
-        for i, path in enumerate(pdfs):
-            st.write(f"**--- Processing file {i+1}/{len(pdfs)} ---**")
-            docs = process_pdf(path)
+        for p in pdfs:
+            st.write(f"Processing {os.path.basename(p)}...")
+            docs = process_pdf(p)
             if docs:
                 added = add_to_index(ix, docs)
                 total += added
-                st.write(f"✅ Successfully added {added} sections")
-            else:
-                st.write("⚠️ No sections were extracted from this PDF")
         
-        st.success(f"### ✅ FINISHED! Total sections indexed: {total}")
+        st.success(f"✅ Indexed {total} sections!")
         if tmp: shutil.rmtree(tmp)
+        
+        # Update session state with fresh index
+        st.session_state.ix = whoosh_index.open_dir(INDEX_PATH)
         st.rerun()
 
 with tab2:
@@ -161,15 +143,14 @@ with tab2:
     q = st.text_input("Keywords", value="harness OR connector OR payload")
     
     if st.button("🔎 Search"):
-        try:
-            ix = whoosh_index.open_dir(INDEX_PATH)
-            results = search_index(ix, q)
+        if st.session_state.ix:
+            results = search_index(st.session_state.ix, q)
             if not results:
                 st.info("No matches found")
             for hit in results:
                 with st.expander(f"{hit.get('pe_number')} — {hit.get('program_title', '')}"):
                     st.write(hit.get("content", "")[:800])
-        except:
+        else:
             st.warning("No index yet. Upload PDFs first.")
 
-st.caption("v3.2 • Heavy Logging Version • May 2026")
+st.caption("v3.3 • Session State Fixed • May 2026")
