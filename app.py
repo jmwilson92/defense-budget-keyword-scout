@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Full UI - Clean & Readable
+Clean Professional UI
 """
 
 import os
@@ -117,10 +117,10 @@ def load_capabilities():
 def save_capabilities(keywords):
     json.dump({"keywords": keywords}, open(CAPABILITIES_FILE, "w"))
 
-# UI
+# ==================== UI ====================
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
 st.title("🎯 DoD Budget Justification Keyword Scout")
-st.caption("Search official DoD budget justifications & descriptive summaries • Target keywords in line items • Research POCs • Built for defense contractors & SDVOSBs")
+st.caption("Search official DoD budget justifications • Target keywords in line items • Research POCs • Built for defense contractors & SDVOSBs")
 
 with st.sidebar:
     st.header("Index Status")
@@ -142,8 +142,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 
 # ========== TAB 1: DATA INGESTION ==========
 with tab1:
-    st.header("Ingest & Index Budget Justification PDFs")
-    st.markdown("**Upload one or more PDF files** from comptroller.defense.gov")
+    st.header("📥 Upload & Index Budget PDFs")
+    st.markdown("Upload one or more PDF justification books from comptroller.defense.gov")
 
     uploaded = st.file_uploader("Upload PDF(s)", type="pdf", accept_multiple_files=True)
     
@@ -155,7 +155,7 @@ with tab1:
             p = os.path.join(tmp, f.name)
             with open(p, "wb") as out: out.write(f.getbuffer())
             pdfs.append(p)
-        st.success(f"✅ {len(uploaded)} file(s) ready to process")
+        st.success(f"✅ {len(uploaded)} file(s) ready")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -171,28 +171,27 @@ with tab1:
         total = 0
         
         for p in pdfs:
-            st.write(f"Processing {os.path.basename(p)}...")
-            docs = process_pdf(p)
-            if docs:
-                added = add_to_index(ix, docs)
-                total += added
+            with st.spinner(f"Processing {os.path.basename(p)}..."):
+                docs = process_pdf(p)
+                if docs:
+                    added = add_to_index(ix, docs)
+                    total += added
         
-        st.success(f"✅ Indexed {total} sections from {len(pdfs)} files!")
+        st.success(f"✅ Successfully indexed {total} sections from {len(pdfs)} files!")
         if tmp: shutil.rmtree(tmp)
         st.rerun()
 
-    st.divider()
-    st.subheader("What gets indexed?")
-    st.markdown("""
-    - The tool segments text into **Program Element (PE)** sections
-    - Only substantial descriptive text is kept
-    - Works with both RDT&E and Procurement justification books
-    """)
+    with st.expander("What gets indexed?"):
+        st.markdown("""
+        - The tool segments text into **Program Element (PE)** sections
+        - Only substantial descriptive text is kept
+        - Works with both RDT&E and Procurement justification books
+        """)
 
 # ========== TAB 2: SEARCH & TARGET ==========
 with tab2:
-    st.header("Keyword Search Across Budget Justifications")
-    st.caption("Enter keywords or Whoosh query syntax. Results are ranked by relevance.")
+    st.header("🔍 Search Budget Justifications")
+    st.caption("Enter keywords or Whoosh query syntax")
 
     query = st.text_input("Search query", value="harness OR connector OR payload")
 
@@ -215,7 +214,7 @@ with tab2:
 # ========== TAB 3: MY CAPABILITIES ==========
 with tab3:
     st.header("⭐ My Capabilities")
-    st.markdown("Edit the keywords that describe what you sell or do.")
+    st.markdown("Edit keywords that describe what you sell or do.")
 
     capabilities = load_capabilities()
     caps_text = st.text_area("Keywords (one per line)", "\n".join(capabilities), height=180)
@@ -230,7 +229,7 @@ with tab3:
             save_capabilities(DEFAULT_CAPABILITIES)
             st.rerun()
 
-    st.info("Capability scoring coming soon. Use the Search tab for now.")
+    st.info("Capability scoring coming in next update. Use Search tab for now.")
 
 # ========== TAB 4: POC RESEARCH HELPER ==========
 with tab4:
@@ -255,7 +254,7 @@ with tab4:
 
 # ========== TAB 5: HELP & ABOUT ==========
 with tab5:
-    st.header("Help & About")
+    st.header("ℹ️ Help & About")
     
     with st.expander("Where to Download Budget PDFs", expanded=True):
         st.markdown("""
@@ -279,7 +278,7 @@ with tab5:
     Good luck landing those conversations and contracts.
     """)
 
-    st.caption("v3.6 • Clean Layout • May 2026")
+    st.caption("v3.7 • Clean Professional UI • May 2026")
 
 st.divider()
 st.caption("Run locally with `streamlit run app.py` after `pip install -r requirements.txt`")
