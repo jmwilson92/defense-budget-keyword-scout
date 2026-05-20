@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Full UI - All 5 tabs preserved + Upload button only in Data Ingestion
+Full UI - All 5 tabs + Reliable Upload Indexing
 """
 
 import os
@@ -88,7 +88,7 @@ def process_pdf_to_documents(pdf_path: str) -> List[Dict[str, Any]]:
     current_title = source_name.replace(".pdf", "").replace("_", " ")
     current_text_parts = []
     current_pages = []
-    min_chunk_chars = 300
+    min_chunk_chars = 200  # lowered for better results
 
     for page_num in range(len(doc)):
         text = clean_text(doc[page_num].get_text("text"))
@@ -507,7 +507,7 @@ with tab5:
     Good luck landing those conversations and contracts.
     """)
 
-    st.caption("v2.10 • Full UI Preserved • May 2026")
+    st.caption("v3.1 • Full UI Preserved • May 2026")
 
 # Footer
 st.divider()
