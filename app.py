@@ -273,36 +273,76 @@ with tab3:
 # ========== TAB 4: POC RESEARCH HELPER (IMPROVED) ==========
 with tab4:
     st.header("🧭 POC Research Helper")
-    st.markdown("Generate targeted, actionable research queries and outreach materials.")
+    st.markdown("**Goal:** Find actual Program Managers, TPOCs, Contracting Officers, and other decision makers you can contact.")
 
-    col_pe, col_title = st.columns(2)
-    with col_pe:
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
         pe = st.text_input("Program Element (e.g. 0601234N)")
-    with col_title:
-        title = st.text_input("Program Title")
+    with col2:
+        program_title = st.text_input("Program Title (optional but helpful)")
 
-    if st.button("Generate Research Package", type="primary"):
-        if not pe and not title:
-            st.warning("Enter at least a PE number or program title")
+    if st.button("Generate Contact Research Package", type="primary"):
+        if not pe and not program_title:
+            st.warning("Please enter at least a Program Element number")
         else:
-            base = f'"{pe}" "{title}"' if title else f'"{pe}"'
-            
-            st.subheader("1. Google / LinkedIn Searches")
-            st.code(f'{base} ("Program Manager" OR TPOC OR "Technical Point of Contact" OR "Contracting Officer") (Navy OR "Air Force" OR Army OR DARPA OR MDA)')
-            st.code(f'{base} ("Program Manager" OR TPOC) site:linkedin.com')
-            
-            st.subheader("2. SBIR / STTR Opportunities")
-            st.code(f'{pe} OR "{title}" site:sbir.gov OR site:sttr.gov')
-            
-            st.subheader("3. Recent Awards & Spending")
-            st.code(f'{base} (award OR contract OR "program element") site:usaspending.gov')
-            
-            st.subheader("4. SAM.gov Opportunities")
-            st.code(f'{pe} OR "{title}" defense harness OR connector OR avionics')
-            
-            st.subheader("5. Suggested Outreach Email Subject Lines")
-            st.code(f"Re: FY27 {title or 'Program'} - {pe} Capability Alignment")
-            st.code(f"Support for {title or 'Program'} ({pe}) - Advanced Interconnect Solutions")
+            base = f'"{pe}"'
+            if program_title:
+                base = f'"{pe}" "{program_title}"'
+
+            st.subheader("1. Best LinkedIn Searches (Copy & Paste These)")
+
+            st.markdown("**Search 1 - Program Leadership**")
+            st.code(f'{base} ("Program Manager" OR TPOC OR "Technical Point of Contact" OR "Program Director") (Navy OR "Air Force" OR Army OR DARPA OR MDA OR "Space Force")')
+
+            st.markdown("**Search 2 - Contracting Officers**")
+            st.code(f'{base} ("Contracting Officer" OR KO OR "Procurement Officer" OR "Contract Specialist") (Navy OR "Air Force" OR Army)')
+
+            st.markdown("**Search 3 - Technical Team**")
+            st.code(f'{base} ("Technical Director" OR "Chief Engineer" OR "Lead Engineer" OR "Principal Investigator")')
+
+            st.subheader("2. Direct Action Links")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("🔗 Open LinkedIn Search"):
+                    import webbrowser
+                    from urllib.parse import quote_plus
+                    url = f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(base)}"
+                    webbrowser.open_new_tab(url)
+
+            with col_b:
+                if st.button("🔗 Open USAspending.gov"):
+                    import webbrowser
+                    from urllib.parse import quote_plus
+                    url = f"https://www.usaspending.gov/search/?q={quote_plus(pe)}"
+                    webbrowser.open_new_tab(url)
+
+            st.subheader("3. SBIR / STTR (Best Source for TPOC Names + Emails)")
+
+            st.markdown("**Step-by-step:**")
+            st.write("1. Go to sbir.gov and search for your PE or program title")
+            st.write("2. Open recent topics under that PE")
+            st.write("3. The TPOC name + email is usually listed at the bottom of the topic")
+            st.code(f'{pe} OR "{program_title}" site:sbir.gov')
+
+            st.subheader("4. Suggested Email Subject Lines (Copy These)")
+
+            st.code(f"Re: FY27 {program_title or 'Program'} ({pe}) - Capability Alignment Discussion")
+            st.code(f"Support for {program_title or 'Program'} ({pe}) - [Your Technology] Solutions")
+            st.code(f"Industry Input for {program_title or 'Program'} ({pe}) - Technical Capabilities")
+
+            st.subheader("5. Next Steps After Searching")
+
+            st.markdown("""
+            **After running the LinkedIn searches above:**
+            - Look for people with titles like: "Program Manager, [PE or Platform]", "TPOC for [Program]", "Technical Director - [Program Name]"
+            - Check their profile for "Experience" section — many list the exact program they support
+            - Send a short, specific message referencing the justification language you found
+
+            **Pro tip:** Many TPOCs are listed on SBIR/STTR topics with their direct email. This is often the fastest way to get a real POC.
+            """)
 
 # ========== TAB 5: HELP & ABOUT ==========
 with tab5:
