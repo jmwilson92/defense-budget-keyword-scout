@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DoD Budget Justification Keyword Scout (BudgetPOC Scout)
-Full version - All tabs + Upload button only in Data Ingestion
+Full UI - All 5 tabs preserved + Upload button only in Data Ingestion
 """
 
 import os
@@ -209,6 +209,11 @@ def get_all_indexed_documents(ix):
                 "content": doc.get("content", "")[:2000],
             })
     return docs
+
+def score_document(content, keywords):
+    content_lower = content.lower()
+    matched = [kw for kw in keywords if kw.lower() in content_lower]
+    return len(matched), matched
 
 # ----------------------------- STREAMLIT UI -----------------------------
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
@@ -438,7 +443,7 @@ with tab3:
             if not scored:
                 st.warning("No matches found. Try adding more or different keywords.")
             else:
-                st.success(f"Top matches: {len(scored)} sections contain at least one of your keywords.")
+                st.success(f"Top matches: {len(scored)} sections contain at least one of your keywords. Showing highest overlap first.")
                 df = pd.DataFrame(scored[:30])
                 st.dataframe(df[["pe_number", "program_title", "source", "match_count", "matched_keywords"]], use_container_width=True)
 
@@ -502,7 +507,7 @@ with tab5:
     Good luck landing those conversations and contracts.
     """)
 
-    st.caption("v2.8 • Full UI + Upload only • May 2026")
+    st.caption("v2.10 • Full UI Preserved • May 2026")
 
 # Footer
 st.divider()
