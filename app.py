@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import re
-import json
 import shutil
 import tempfile
 import streamlit as st
@@ -81,27 +80,31 @@ def add_to_index(ix, docs):
     w.commit()
     return len(docs)
 
-def search_index(ix, q, limit=20):
-    p = MultifieldParser(["content", "program_title"], schema=ix.schema)
-    with ix.searcher() as s:
-        return s.search(p.parse(q), limit=limit)
+def search_index(query, limit=20):
+    try:
+        ix = whoosh_index.open_dir(INDEX_PATH)
+        parser = MultifieldParser(["content", "program_title"], schema=ix.schema)
+        with ix.searcher() as s:
+            results = s.search(parser.parse(query), limit=limit)
+            # Convert to list so we can use after searcher closes
+            return [{"pe_number": r.get("pe_number", "Unknown"), 
+                    "program_title": r.get("program_title", ""), 
+                    "content": r.get("content", "")[:800]} for r in results]
+    except:
+        return []
 
 # UI
 st.set_page_config(page_title=APP_NAME, page_icon="🎯", layout="wide")
 st.title("🎯 DoD Budget Justification Keyword Scout")
 
-# Use session state to persist the index
-if "ix" not in st.session_state:
-    try:
-        st.session_state.ix = whoosh_index.open_dir(INDEX_PATH)
-    except:
-        st.session_state.ix = None
-
 with st.sidebar:
     st.header("Index Status")
-    if st.session_state.ix:
-        st.success(f"✅ {st.session_state.ix.searcher().doc_count():,} sections indexed")
-    else:
+    try:
+        ix = whoosh_index.open_dir(INDEX_PATH)
+        with ix.searcher() as s:
+            count = s.doc_count()
+        st.success(f"✅ {count:,} sections indexed")
+    except:
         st.warning("No index yet")
 
 tab1, tab2 = st.tabs(["📥 Upload & Index", "🔍 Search"])
@@ -123,19 +126,14 @@ with tab1:
     if st.button("🚀 Scan & Build / Update Index", type="primary", disabled=not pdfs):
         ix = get_or_create_index()
         total = 0
-        
         for p in pdfs:
             st.write(f"Processing {os.path.basename(p)}...")
             docs = process_pdf(p)
             if docs:
                 added = add_to_index(ix, docs)
                 total += added
-        
         st.success(f"✅ Indexed {total} sections!")
         if tmp: shutil.rmtree(tmp)
-        
-        # Update session state with fresh index
-        st.session_state.ix = whoosh_index.open_dir(INDEX_PATH)
         st.rerun()
 
 with tab2:
@@ -143,14 +141,11 @@ with tab2:
     q = st.text_input("Keywords", value="harness OR connector OR payload")
     
     if st.button("🔎 Search"):
-        if st.session_state.ix:
-            results = search_index(st.session_state.ix, q)
-            if not results:
-                st.info("No matches found")
-            for hit in results:
-                with st.expander(f"{hit.get('pe_number')} — {hit.get('program_title', '')}"):
-                    st.write(hit.get("content", "")[:800])
-        else:
-            st.warning("No index yet. Upload PDFs first.")
+        results = search_index(q)
+        if not results:
+            st.info("No matches found")
+        for hit in results:
+            with st.expander(f"{hit['pe_number']} — {hit['program_title']}"):
+                st.write(hit['content'])
 
-st.caption("v3.3 • Session State Fixed • May 2026")
+st.caption("v3.4 • Fixed ReaderClosed error • May 2026")
